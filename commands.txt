@@ -1,0 +1,2 @@
+ansible-playbook -i inventory.ini redteamtool.yml
+curl -X POST -d "cmd=echo test" http://debian@100.65.0.204/scoring/scoring.php
